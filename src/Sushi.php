@@ -40,9 +40,9 @@ trait Sushi
     {
         $instance = (new static);
 
-        $cacheFileName = config('sushi.cache-prefix', 'sushi').'-'.Str::kebab(str_replace('\\', '', static::class)).'.sqlite';
+        $cacheFileName = config('sushi.cache-prefix', 'sushi') . '-' . Str::kebab(str_replace('\\', '', static::class)) . '.sqlite';
         $cacheDirectory = realpath(config('sushi.cache-path', storage_path('framework/cache')));
-        $cachePath = $cacheDirectory.'/'.$cacheFileName;
+        $cachePath = $cacheDirectory . '/' . $cacheFileName;
         $dataPath = $instance->sushiCacheReferencePath();
 
         $states = [
@@ -65,23 +65,14 @@ trait Sushi
             },
         ];
 
-        switch (true) {
-            case ! $instance->sushiShouldCache():
-                $states['no-caching-capabilities']();
-                break;
+        $callback = match (true) {
+            !$instance->sushiShouldCache() => $states['no-caching-capabilities'],
+            file_exists($cachePath) && filemtime($dataPath) <= filemtime($cachePath) => $states['cache-file-found-and-up-to-date'],
+            file_exists($cacheDirectory) && is_writable($cacheDirectory) => $states['cache-file-not-found-or-stale'],
+            default => $states['no-caching-capabilities'],
+        };
 
-            case file_exists($cachePath) && filemtime($dataPath) <= filemtime($cachePath):
-                $states['cache-file-found-and-up-to-date']();
-                break;
-
-            case file_exists($cacheDirectory) && is_writable($cacheDirectory):
-                $states['cache-file-not-found-or-stale']();
-                break;
-
-            default:
-                $states['no-caching-capabilities']();
-                break;
-        }
+        $callback();
     }
 
     protected static function setSqliteConnection($database)
@@ -93,7 +84,7 @@ trait Sushi
 
         static::$sushiConnection = app(ConnectionFactory::class)->make($config);
 
-        app('config')->set('database.connections.'.static::class, $config);
+        app('config')->set('database.connections.' . static::class, $config);
     }
 
     public function migrate()
@@ -118,7 +109,7 @@ trait Sushi
     {
         $this->createTableSafely($tableName, function ($table) use ($firstRow) {
             // Add the "id" column if it doesn't already exist in the rows.
-            if ($this->incrementing && ! array_key_exists($this->primaryKey, $firstRow)) {
+            if ($this->incrementing && !array_key_exists($this->primaryKey, $firstRow)) {
                 $table->increments($this->primaryKey);
             }
 
@@ -152,7 +143,7 @@ trait Sushi
                 $table->{$type}($column)->nullable();
             }
 
-            if ($this->usesTimestamps() && (! in_array('updated_at', array_keys($firstRow)) || ! in_array('created_at', array_keys($firstRow)))) {
+            if ($this->usesTimestamps() && (!in_array('updated_at', array_keys($firstRow)) || !in_array('created_at', array_keys($firstRow)))) {
                 $table->timestamps();
             }
         });
@@ -163,7 +154,7 @@ trait Sushi
         $this->createTableSafely($tableName, function ($table) {
             $schema = $this->getSchema();
 
-            if ($this->incrementing && ! in_array($this->primaryKey, array_keys($schema))) {
+            if ($this->incrementing && !in_array($this->primaryKey, array_keys($schema))) {
                 $table->increments($this->primaryKey);
             }
 
@@ -176,7 +167,7 @@ trait Sushi
                 $table->{$type}($name)->nullable();
             }
 
-            if ($this->usesTimestamps() && (! in_array('updated_at', array_keys($schema)) || ! in_array('created_at', array_keys($schema)))) {
+            if ($this->usesTimestamps() && (!in_array('updated_at', array_keys($schema)) || !in_array('created_at', array_keys($schema)))) {
                 $table->timestamps();
             }
         });
@@ -209,7 +200,8 @@ trait Sushi
             : false;
     }
 
-    public function getSushiInsertChunkSize() {
+    public function getSushiInsertChunkSize()
+    {
         return $this->sushiInsertChunkSize ?? 100;
     }
 

@@ -21,11 +21,6 @@ trait Sushi
         return $this->schema ?? [];
     }
 
-    protected function sushiCacheReferencePath()
-    {
-        return (new \ReflectionClass(static::class))->getFileName();
-    }
-
     protected function sushiShouldCache()
     {
         return property_exists(static::class, 'rows');
@@ -46,27 +41,30 @@ trait Sushi
         return realpath(config('sushi.cache-path', storage_path('framework/cache')));
     }
 
+    public static function dataLastAlteredAt(): int
+    {
+        return (int) filemtime((new \ReflectionClass(static::class))->getFileName());
+    }
+
     public static function bootSushi()
     {
         $instance = (new static);
 
-        $cacheFileName = static::cacheFileName();
         $cacheDirectory = static::cacheDirectory();
-        $cachePath = $cacheDirectory . '/' . $cacheFileName;
-        $dataPath = $instance->sushiCacheReferencePath();
+        $cachePath = static::cachePath();
 
         $states = [
             'cache-file-found-and-up-to-date' => function () use ($cachePath) {
                 static::setSqliteConnection($cachePath);
             },
-            'cache-file-not-found-or-stale' => function () use ($cachePath, $dataPath, $instance) {
+            'cache-file-not-found-or-stale' => function () use ($cachePath, $instance) {
                 file_put_contents($cachePath, '');
 
                 static::setSqliteConnection($cachePath);
 
                 $instance->migrate();
 
-                touch($cachePath, filemtime($dataPath));
+                touch($cachePath, static::dataLastAlteredAt());
             },
             'no-caching-capabilities' => function () use ($instance) {
                 static::setSqliteConnection(':memory:');
@@ -77,12 +75,22 @@ trait Sushi
 
         $callback = match (true) {
             !$instance->sushiShouldCache() => $states['no-caching-capabilities'],
-            file_exists($cachePath) && filemtime($dataPath) <= filemtime($cachePath) => $states['cache-file-found-and-up-to-date'],
+            file_exists($cachePath) && static::cacheUpToDate() => $states['cache-file-found-and-up-to-date'],
             file_exists($cacheDirectory) && is_writable($cacheDirectory) => $states['cache-file-not-found-or-stale'],
             default => $states['no-caching-capabilities'],
         };
 
         $callback();
+    }
+
+    protected static function cachePath(): string
+    {
+        return static::cacheDirectory() . '/' . static::cacheFileName();
+    }
+
+    protected static function cacheUpToDate(): bool
+    {
+        return static::dataLastAlteredAt() <= filemtime(static::cachePath());
     }
 
     protected static function setSqliteConnection($database)
